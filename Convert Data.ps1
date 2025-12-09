@@ -56,7 +56,7 @@ Write-Output "Processing: $orgCode Data"
 get-content -path "$tempPath$orgCode-lims-output.csv" -raw | foreach-object {$_ -replace "[\x00-\x08\x0B\x0C\x0E-\x1F\xA0]"} | Set-Content -path "$tempPath$orgCode-test-interim.csv"
 import-csv -Path  "$tempPath$orgCode-test-interim.csv" |  ConvertTo-Xml -as String | Set-Content -path "$tempPath$orgCode-multi-records-test.xml" -Encoding UTF8
 $xslt = New-Object System.Xml.Xsl.XslCompiledTransform;
-$xslt.load( "$rootPath/rcf-convert.xslt" )
+$xslt.load( "$rootPath/$orgCode-convert.xslt" )
 $xslt.Transform( "$tempPath$orgCode-multi-records-test.xml", "$tempPath$orgCode-cosd-export.xml" )
 
 # De-duplication of SNOMED codes
@@ -127,23 +127,3 @@ Write-Output "Tidying up temp files"
 remove-item -Path "$tempPath*.*"
 Write-Output "Script finished... :-)"
 pause
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
