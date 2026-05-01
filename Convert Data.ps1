@@ -12,14 +12,18 @@ Write-Output "COSD Script v2.0"
 Write-Output "--------------------"
 Write-Output ""
 
+# Namespace manager
+$nsm = New-Object System.Xml.XmlNamespaceManager($xml.NameTable)
+$nsm.AddNamespace("cosd", "http://www.datadictionary.nhs.uk/messages/COSD_Pathology-v5-1-1")
+
 # Location of the zip file from PathManager
-$inputPath = "x:/COSD/input/*.zip"
+$inputPath = "c:/Pathology/COSD-dev/input/*.zip"
 # Location of the xml file to be output
-$outputPath = "x:/COSD/output/"
+$outputPath = "c:/Pathology/COSD-dev/output/"
 # Temporary folder for extracted files
-$tempPath = "x:/COSD/temp/"
+$tempPath = "c:/Pathology/COSD-dev/temp/"
 # Root folder (location of the script and xslt file)
-$rootPath = "x:/COSD"
+$rootPath = "c:/Pathology/COSD-dev"
 
 # Organisation codes to work through
 # These are used to identify the file names of the different extracted data files
@@ -55,6 +59,7 @@ If (Test-Path -Path "$outputPath$orgCode-cosd-export.xml")
 Write-Output "Processing: $orgCode Data"
 get-content -path "$tempPath$orgCode-lims-output.csv" -raw | foreach-object {$_ -replace "[\x00-\x08\x0B\x0C\x0E-\x1F\xA0]"} | Set-Content -path "$tempPath$orgCode-test-interim.csv"
 import-csv -Path  "$tempPath$orgCode-test-interim.csv" |  ConvertTo-Xml -as String | Set-Content -path "$tempPath$orgCode-multi-records-test.xml" -Encoding UTF8
+
 $xslt = New-Object System.Xml.Xsl.XslCompiledTransform;
 $xslt.load( "$rootPath/$orgCode-convert.xslt" )
 $xslt.Transform( "$tempPath$orgCode-multi-records-test.xml", "$tempPath$orgCode-cosd-export.xml" )
@@ -64,24 +69,77 @@ $xslt.Transform( "$tempPath$orgCode-multi-records-test.xml", "$tempPath$orgCode-
 Write-Output "De-duplicating SNOMED codes"
 [xml]$xml = Get-Content -Path "$tempPath$orgCode-cosd-export.xml" -Encoding UTF8
 
-# Iterate through each Record
-foreach ($record in $xml.SelectNodes("//Record")) {
-    $core = $record.CorePathology
+foreach ($other in $xml.SelectNodes("//OtherRecord")) {
 
-    # De-duplicate TopographySNOMEDPathology
-    if ($core.TopographySNOMEDPathology) {
-        $topoCodes = $core.TopographySNOMEDPathology -split '\|'
-        $uniqueTopo = $topoCodes | Sort-Object -Unique
-        $core.TopographySNOMEDPathology = $uniqueTopo -join '|'
+    $path = $other.Pathology
+    if (-not $path) { continue }
+
+    $tmNode = $path.TopographyMorphologySnomed
+    if (-not $tmNode) { continue }
+
+    #
+    # 1) Extract ALL codes from existing XML
+    #
+    $rawCodes = @()
+
+    foreach ($node in $tmNode.SelectNodes("TopographySnomedPathology | MorphologySnomedPathology")) {
+        if ($node.code) { $rawCodes += $node.code }
     }
 
-    # De-duplicate MorphologySNOMEDPathology
-    if ($core.MorphologySNOMEDPathology) {
-        $morphCodes = $core.MorphologySNOMEDPathology -split '\|'
-        $uniqueMorph = $morphCodes | Sort-Object -Unique
-        $core.MorphologySNOMEDPathology = $uniqueMorph -join '|'
+    #
+    # 2) Normalise separators (comma to pipe)
+    #
+    $rawCodes = ($rawCodes -join "|") -replace ',', '|'
+
+    #
+    # 3) Clean, split, dedupe
+    #
+    $codes =
+        $rawCodes -split '\|' |
+        ForEach-Object { $_.Trim() } |
+        Where-Object { $_ -ne "" } |
+        Sort-Object -Unique
+
+    #
+    # 4) Split into Topography (T) and Morphology (M)
+    #
+    $topoCodes =
+        $codes |
+        Where-Object { $_.StartsWith("T") }
+
+    $morphCodes =
+        $codes |
+        Where-Object { $_.StartsWith("M") }
+
+    #
+    # 5) Remove ALL existing SNOMED nodes (except version)
+    #
+    $tmNode.SelectNodes("TopographySnomedPathology | MorphologySnomedPathology") |
+        ForEach-Object { $tmNode.RemoveChild($_) | Out-Null }
+
+    #
+    # 6) Add Topography nodes
+    #
+    foreach ($code in $topoCodes) {
+        $newNode = $xml.CreateElement("TopographySnomedPathology")
+        $attr = $xml.CreateAttribute("code")
+        $attr.Value = $code
+        $newNode.Attributes.Append($attr) | Out-Null
+        $tmNode.AppendChild($newNode) | Out-Null
+    }
+
+    #
+    # 7) Add Morphology nodes
+    #
+    foreach ($code in $morphCodes) {
+        $newNode = $xml.CreateElement("MorphologySnomedPathology")
+        $attr = $xml.CreateAttribute("code")
+        $attr.Value = $code
+        $newNode.Attributes.Append($attr) | Out-Null
+        $tmNode.AppendChild($newNode) | Out-Null
     }
 }
+
 
 # Save the updated XML to a new file in the final output folder
 $xml.Save("$tempPath$orgCode-cosd-export.xml")
@@ -99,16 +157,56 @@ $ReportingPeriodEndDate = $dates[0].ReportingPeriodEndDate
 # Apply the dates to the file
 Write-Output "Applying date information to: $orgCode"
 
-# Load and update XML
-$xml = New-Object XML
+# Load XML
+$xml = New-Object System.Xml.XmlDocument
 $xml.Load("$tempPath$orgCode-cosd-export.xml")
-$xml_filedate = $xml.SelectSingleNode("LIMSData/FileCreationDateTime")
-$xml_reportStartDate = $xml.SelectSingleNode("LIMSData/ReportingPeriodStartDate")
-$xml_reportEndDate = $xml.SelectSingleNode("LIMSData/ReportingPeriodEndDate")
-# Set the dates within the InnerText of the xml fields
-$xml_filedate.InnerText = $fileDateCreation
+
+# Select nodes using namespace-aware XPath
+$xml_filedate        = $xml.SelectSingleNode("//cosd:COSD_Pathology/FileCreationDateTime", $nsm)
+$xml_reportStartDate = $xml.SelectSingleNode("//cosd:COSD_Pathology/ReportingPeriodStartDate", $nsm)
+$xml_reportEndDate   = $xml.SelectSingleNode("//cosd:COSD_Pathology/ReportingPeriodEndDate", $nsm)
+
+# Debug
+Write-Host "FileDate node: $xml_filedate"
+$node = $xml.SelectSingleNode("//*[local-name()='FileCreationDateTime']")
+Write-Host "Namespace URI: $($node.NamespaceURI)"
+
+# Update values
+$xml_filedate.InnerText        = $fileDateCreation
 $xml_reportStartDate.InnerText = $ReportingPeriodStartDate
-$xml_reportEndDate.InnerText = $ReportingPeriodEndDate
+$xml_reportEndDate.InnerText   = $ReportingPeriodEndDate
+
+# Save
+$xml.Save("$tempPath$orgCode-cosd-export.xml")
+
+
+# GUID Additions;
+# Load XML
+$xml = New-Object System.Xml.XmlDocument
+$xml.Load("$tempPath$orgCode-cosd-export.xml")
+
+# GUID for the overall xml
+$xml_rootID = $xml.SelectSingleNode("//cosd:COSD_Pathology/Id", $nsm)
+$xml_rootID.Attributes["root"].Value = (New-Guid).ToString().ToUpper()
+
+foreach ($record in $xml.SelectNodes("//OtherRecord")) {
+
+    $newNode = $xml.CreateElement("Id")
+    $attr = $xml.CreateAttribute("root")
+    $attr.Value = (New-Guid).ToString().ToUpper()
+    $newNode.Attributes.Append($attr)
+
+    if ($record.HasChildNodes) {
+        $record.InsertBefore($newNode, $record.FirstChild)
+    }
+    else {
+        $record.AppendChild($newNode)
+    }
+}
+
+# Save back to the fil
+$xml.Save("$tempPath$orgCode-cosd-export.xml")
+
 
 # Save with UTF-8 encoding (no-BOM)
 $settings = New-Object System.Xml.XmlWriterSettings
