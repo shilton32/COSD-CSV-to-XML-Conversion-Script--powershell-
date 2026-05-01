@@ -1,11 +1,8 @@
-# COSD Data Conversion Script
+# COSD Data Conversion Script - v3.0
+
+Changes: Direct csv to COSD required format.  Total rewrite of each xslt file alongside the ps1 script.
 
 This script is used to transform CSV data downloaded from the Clinisys PathManager tool using an appropriate column naming convention, to the XML format for upload to the mTuitive solution.
 
-# mTuitive XML Format
-
-Process is documented here:
-https://mtuitive-technical-documents.helpscoutdocs.com/article/82-mtuitive-lims-cosd-export-specification
-
-XML Schema with example is documented here:
-https://mtuitive-technical-documents.helpscoutdocs.com/article/742-mtuitive-lims-cosd-schema-specification
+The script is configured to convert data for multiple organisations at the same time - this can be changed or reduced to just one organisation by
+changing the $orgCodes array.

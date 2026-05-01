@@ -1,14 +1,14 @@
 # COSD Data Conversion Script
-# Version 2.0
+# Version 3.0
 # Author: Chris Shilton
-# Date: 2025-09-10
+# Date: 2026-05-01
 # Description: This script processes COSD data files extracted from PathManager.
 # The input is a zip file containing CSV files for different organisations.
 # The script extracts the zip, converts the CSV files to XML using XSLT, and performs data transformations, de-duplication of SNOMED codes,
 # and adds required date fields before saving the final XML files to the output directory.
-# The output XML files are formatted to be compatible with the Xpert mTuitive upload requirements.
+# The output XML files are formatted to be compatible with direct submission to NHS Digital's COSD Pathology system.
 
-Write-Output "COSD Script v2.0"
+Write-Output "COSD Script v3.0"
 Write-Output "--------------------"
 Write-Output ""
 
