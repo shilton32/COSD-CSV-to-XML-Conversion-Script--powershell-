@@ -1,0 +1,16 @@
+# ignore basic file types to prevent accidental commits of sensitive data
+*.csv
+*.zip
+*.txt
+*.xml
+
+# ignore core folder strucutre to prevent accidental commits of sensitive data
+input/
+output/
+temp/
+archive/
+
+# ignore folders used for seperate dev work historically
+De-duplication Script/
+mTuitive Data Dedupe/
+
