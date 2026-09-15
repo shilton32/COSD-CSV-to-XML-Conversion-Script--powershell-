@@ -8,22 +8,18 @@
 # and adds required date fields before saving the final XML files to the output directory.
 # The output XML files are formatted to be compatible with direct submission to NHS Digital's COSD Pathology system.
 
-Write-Output "COSD Script v3.0"
+Write-Output "COSD Script v3.2"
 Write-Output "--------------------"
 Write-Output ""
 
-# Namespace manager
-$nsm = New-Object System.Xml.XmlNamespaceManager($xml.NameTable)
-$nsm.AddNamespace("cosd", "http://www.datadictionary.nhs.uk/messages/COSD_Pathology-v5-1-1")
-
 # Location of the zip file from PathManager
-$inputPath = "c:/Pathology/COSD-dev/input/*.zip"
+$inputPath = "c:/Pathology/COSD/input/*.zip"
 # Location of the xml file to be output
-$outputPath = "c:/Pathology/COSD-dev/output/"
+$outputPath = "c:/Pathology/COSD/output/"
 # Temporary folder for extracted files
-$tempPath = "c:/Pathology/COSD-dev/temp/"
+$tempPath = "c:/Pathology/COSD/temp/"
 # Root folder (location of the script and xslt file)
-$rootPath = "c:/Pathology/COSD-dev"
+$rootPath = "c:/Pathology/COSD"
 
 # Organisation codes to work through
 # These are used to identify the file names of the different extracted data files
@@ -40,9 +36,26 @@ $orgCodes = @(
 Remove-Item "$tempPath*.csv"
 Remove-Item "$tempPath*.xml"
 
+Write-Output "input path: $inputPath"
+Write-Output "temp path: $tempPath"
+
+
+
 # Next, extract the archive
 Write-Output "Extracting data"
 Expand-Archive -Path $inputPath -DestinationPath $tempPath
+
+## Path to the dates.csv file
+$dateFile  = "$tempPath\dates.csv"
+
+# Read entire file as a single string
+$content = Get-Content -Path $dateFile -Raw
+
+# If the file starts with CRLF (`r`n), remove it
+if ($content.StartsWith("`r`n")) {
+    $content = $content.Substring(2)
+    Set-Content -Path $dateFile -Value $content
+}
 
 # Main iteration loop
 Write-Output "Processing data files"
@@ -54,6 +67,21 @@ If (Test-Path -Path "$outputPath$orgCode-cosd-export.xml")
 {
 	Remove-Item "$outputPath$orgCode-cosd-export.xml"
 }
+
+## Path to the original file
+$inputFile  = "$tempPath$orgCode-lims-output.csv"
+
+# Read entire file as a single string
+$content = Get-Content -Path $inputFile -Raw
+
+# If the file starts with CRLF (`r`n), remove it
+if ($content.StartsWith("`r`n")) {
+    $content = $content.Substring(2)
+    Set-Content -Path $inputFile -Value $content
+}
+
+
+
 
 # Transform csv to xml using the xslt library
 Write-Output "Processing: $orgCode Data"
@@ -155,11 +183,15 @@ $ReportingPeriodStartDate = $dates[0].ReportingPeriodStartDate
 $ReportingPeriodEndDate = $dates[0].ReportingPeriodEndDate
 
 # Apply the dates to the file
-Write-Output "Applying date information to: $orgCode"
+Write-Output "Applying date information for: $orgCode"
 
 # Load XML
 $xml = New-Object System.Xml.XmlDocument
 $xml.Load("$tempPath$orgCode-cosd-export.xml")
+
+# Namespace manager
+$nsm = New-Object System.Xml.XmlNamespaceManager($xml.NameTable)
+$nsm.AddNamespace("cosd", "http://www.datadictionary.nhs.uk/messages/COSD_Pathology-v5-1-1")
 
 # Select nodes using namespace-aware XPath
 $xml_filedate        = $xml.SelectSingleNode("//cosd:COSD_Pathology/FileCreationDateTime", $nsm)
