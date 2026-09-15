@@ -41,7 +41,11 @@
       </xsl:attribute>
     </NhsNumber>
 
-	<NHSNumberStatusIndicator>01</NHSNumberStatusIndicator>
+    <NHSNumberStatusIndicator>
+      <xsl:attribute name="code">
+        <xsl:value-of select="Property[@Name='NHS Number Status Indicator']"/>
+      </xsl:attribute>
+    </NHSNumberStatusIndicator>
 
     <LocalPatientIdentifier>
       <xsl:value-of select="Property[@Name='CRN (Hospital) Number']"/>

@@ -35,17 +35,22 @@
   <!-- Patient Identity Details  -->
   <!-- ========================= -->
   <PatientIdentityDetails>
+  
     <NhsNumber>
       <xsl:attribute name="extension">
         <xsl:value-of select="Property[@Name='NHS Number']"/>
       </xsl:attribute>
     </NhsNumber>
 
-	<NHSNumberStatusIndicator>01</NHSNumberStatusIndicator>
-
     <LocalPatientIdentifier>
       <xsl:value-of select="Property[@Name='CRN (Hospital) Number']"/>
     </LocalPatientIdentifier>
+
+    <NHSNumberStatusIndicator>
+      <xsl:attribute name="code">
+        <xsl:value-of select="Property[@Name='NHS Number Status Indicator']"/>
+      </xsl:attribute>
+    </NHSNumberStatusIndicator>
 
     <PersonBirthDate>
 		<xsl:call-template name="dateTimeFormatter">
@@ -59,7 +64,6 @@
       </xsl:attribute>
     </OrganisationIdentifierCodeOfProvider>
   </PatientIdentityDetails>
-
 
   <!-- ========================= -->
   <!-- Demographics              -->
